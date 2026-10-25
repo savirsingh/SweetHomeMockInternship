@@ -53,6 +53,11 @@ public interface PieceOfFurniture {
   public abstract float getHeight();
 
   /**
+   * Returns width times depth times height in the model's centimeter-based units.
+   */
+  public abstract float getVolume();
+
+  /**
    * Returns the width of this piece of furniture.
    */
   public abstract float getWidth();
