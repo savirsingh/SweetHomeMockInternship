@@ -731,6 +731,20 @@ public class FurnitureTable extends JTable implements View, Printable {
     // with printable renderers for each column
     DefaultTableColumnModel printableColumnModel = new DefaultTableColumnModel();
     TableColumnModel columnModel = getColumnModel();
+    List<TableColumn> printedColumns = new ArrayList<TableColumn>();
+    boolean levelColumnPresent = false;
+    for (int i = 0; i < columnModel.getColumnCount(); i++) {
+      TableColumn column = columnModel.getColumn(i);
+      printedColumns.add(column);
+      levelColumnPresent |= column.getIdentifier() == HomePieceOfFurniture.SortableProperty.LEVEL;
+    }
+    if (!levelColumnPresent) {
+      TableColumn levelColumn = new TableColumn();
+      levelColumn.setIdentifier(HomePieceOfFurniture.SortableProperty.LEVEL);
+      levelColumn.setHeaderValue(this.preferences.getLocalizedString(FurnitureTable.class, "levelColumn"));
+      levelColumn.setCellRenderer(FurnitureTableColumnModel.getLevelRenderer());
+      printedColumns.add(levelColumn);
+    }
     final DefaultTableCellRenderer defaultRenderer = new DefaultTableCellRenderer();
     defaultRenderer.setHorizontalAlignment(DefaultTableCellRenderer.CENTER);
     TableCellRenderer printableHeaderRenderer = new TableCellRenderer() {
@@ -750,8 +764,7 @@ public class FurnitureTable extends JTable implements View, Printable {
           return headerRendererLabel;
         }
       };
-    for (int columnIndex = 0, n = columnModel.getColumnCount(); columnIndex < n; columnIndex++) {
-      final TableColumn tableColumn = columnModel.getColumn(columnIndex);
+    for (final TableColumn tableColumn : printedColumns) {
       // Create a printable column from existing table column
       TableColumn printableColumn = new TableColumn();
       printableColumn.setIdentifier(tableColumn.getIdentifier());
@@ -793,20 +806,27 @@ public class FurnitureTable extends JTable implements View, Printable {
     if (EventQueue.isDispatchThread()) {
       TableColumnModel oldColumnModel = getColumnModel();
       Color oldGridColor = getGridColor();
-      setColumnModel(printableColumnModel);   
-      if (OperatingSystem.isWindows()) {
-        // Add 3 pixels to columns to get a correct rendering
-        updateTableColumnsWidth(3);
-      } else {
-        updateTableColumnsWidth(0);
+      FurnitureFilter oldFilter = getFurnitureFilter();
+      Home home = ((FurnitureTreeTableModel)getModel()).home;
+      List<Selectable> selectedItems = new ArrayList<Selectable>(home.getSelectedItems());
+      try {
+        // The print operation covers every viewable level even if the UI has a filter.
+        setFurnitureFilter(null);
+        setColumnModel(printableColumnModel);
+        if (OperatingSystem.isWindows()) {
+          updateTableColumnsWidth(3);
+        } else {
+          updateTableColumnsWidth(0);
+        }
+        setGridColor(gridColor);
+        Printable printable = getPrintable(PrintMode.FIT_WIDTH, null, null);
+        return printable.print(g, pageFormat, pageIndex);
+      } finally {
+        setColumnModel(oldColumnModel);
+        setGridColor(oldGridColor);
+        setFurnitureFilter(oldFilter);
+        home.setSelectedItems(selectedItems);
       }
-      setGridColor(gridColor);
-      Printable printable = getPrintable(PrintMode.FIT_WIDTH, null, null);
-      int pageExists = printable.print(g, pageFormat, pageIndex);
-      // Restore column model and grid color to their previous values
-      setColumnModel(oldColumnModel);
-      setGridColor(oldGridColor);
-      return pageExists;
     } else {
       // Print synchronously table in Event Dispatch Thread
       // The best solution should be to be able to print out of Event Dispatch Thread
@@ -1275,7 +1295,7 @@ public class FurnitureTable extends JTable implements View, Printable {
     /**
      * Returns a renderer that displays the level name of a piece of furniture. 
      */
-    private TableCellRenderer getLevelRenderer() {
+    private static TableCellRenderer getLevelRenderer() {
       return new DefaultTableCellRenderer() { 
         @Override
         public Component getTableCellRendererComponent(JTable table, 
